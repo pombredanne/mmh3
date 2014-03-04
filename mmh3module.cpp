@@ -56,7 +56,7 @@ mmh3_hash64(PyObject *self, PyObject *args, PyObject *keywds)
     static char *kwlist[] = {(char *)"key", (char *)"seed",
       (char *)"x64arch", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, keywds, "s#|i|B", kwlist,
+    if (!PyArg_ParseTupleAndKeywords(args, keywds, "s#|iB", kwlist,
         &target_str, &target_str_len, &seed, &x64arch)) {
         return NULL;
     }
@@ -72,6 +72,39 @@ mmh3_hash64(PyObject *self, PyObject *args, PyObject *keywds)
 }
 
 static PyObject *
+mmh3_hash128(PyObject *self, PyObject *args, PyObject *keywds)
+{
+    const char *target_str;
+    int target_str_len;
+    uint32_t seed = 0;
+    uint64_t result[2];
+    char x64arch = 1;
+
+    static char *kwlist[] = {(char *)"key", (char *)"seed",
+      (char *)"x64arch", NULL};
+
+    if (!PyArg_ParseTupleAndKeywords(args, keywds, "s#|iB", kwlist,
+        &target_str, &target_str_len, &seed, &x64arch)) {
+        return NULL;
+    }
+
+    if (x64arch == 1) {
+      MurmurHash3_x64_128(target_str, target_str_len, seed, result);
+    } else {
+      MurmurHash3_x86_128(target_str, target_str_len, seed, result);
+    }
+
+    
+    /**
+     * _PyLong_FromByteArray is not a part of official Python/C API
+     * and can be displaced (although it is practically stable). cf.
+     * https://mail.python.org/pipermail/python-list/2006-August/372368.html
+     */
+    PyObject *retval = _PyLong_FromByteArray((unsigned char *)result, 16, 1, 0);
+    return retval;
+}
+
+static PyObject *
 mmh3_hash_bytes(PyObject *self, PyObject *args, PyObject *keywds)
 {
     const char *target_str;
@@ -83,7 +116,7 @@ mmh3_hash_bytes(PyObject *self, PyObject *args, PyObject *keywds)
     static char *kwlist[] = {(char *)"key", (char *)"seed",
       (char *)"x64arch", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, keywds, "s#|i|B", kwlist,
+    if (!PyArg_ParseTupleAndKeywords(args, keywds, "s#|iB", kwlist,
         &target_str, &target_str_len, &seed, &x64arch)) {
         return NULL;
     }
@@ -112,9 +145,11 @@ static struct module_state _state;
 
 static PyMethodDef Mmh3Methods[] = {
     {"hash", (PyCFunction)mmh3_hash, METH_VARARGS | METH_KEYWORDS,
-        "hash(key[, seed=0]) -> hash value\n Return a 32 bit integer for a string."},
+        "hash(key[, seed=0]) -> hash value\n Return a 32 bit integer."},
     {"hash64", (PyCFunction)mmh3_hash64, METH_VARARGS | METH_KEYWORDS,
         "hash64(key[, seed=0, x64arch=True]) -> (hash value 1, hash value 2)\n Return a tuple of two 64 bit integers for a string. Optimized for the x64 bit architecture when x64arch=True, otherwise for x86."},
+    {"hash128", (PyCFunction)mmh3_hash128, METH_VARARGS | METH_KEYWORDS,
+        "hash128(key[, seed=0, x64arch=True]]) -> hash value\n Return a 128 bit long integer. Optimized for the x64 bit architecture when x64arch=True, otherwise for x86."},
     {"hash_bytes", (PyCFunction)mmh3_hash_bytes,
       METH_VARARGS | METH_KEYWORDS,
         "hash_bytes(key[, seed=0, x64arch=True]) -> bytes\n Return a 128 bit hash value as bytes for a string. Optimized for the x64 bit architecture when x64arch=True, otherwise for the x86."},
@@ -169,12 +204,12 @@ initmmh3(void)
     if (module == NULL)
         INITERROR;
 
-    PyModule_AddStringConstant(module, "__version__", "2.2");
+    PyModule_AddStringConstant(module, "__version__", "2.3");
 
     struct module_state *st = GETSTATE(module);
 
     st->error = PyErr_NewException((char *) "mmh3.Error", NULL, NULL);
-    if (st->error = NULL) {
+    if (st->error == NULL) {
         Py_DECREF(module);
         INITERROR;
     }
